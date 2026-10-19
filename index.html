@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI 半導體供應鏈地圖</title>
-<meta name="description" content="互動式台灣半導體與 AI 伺服器供應鏈關係圖：查看上下游、產業篩選、即時新聞與股價連結">
+<meta name="description" content="互動式台灣半導體與 AI 伺服器供應鏈關係圖：上下游追溯、產業篩選、每日股價與新聞">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <style>
 :root{
   --bg:#0d1117; --panel:#151b23; --panel-2:#1c232d; --line:#2b3440;
   --text:#e6edf3; --muted:#8b98a5; --accent:#58a6ff;
   --up:#22d3ee; --down:#fb923c;
+  --rise:#ff5c5c; --fall:#2ecc71;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
@@ -36,36 +37,53 @@ header{display:flex;align-items:center;gap:10px 16px;padding:10px 16px;border-bo
 .chip .dot{width:10px;height:10px;border-radius:50%}
 .chip.off{opacity:.35}
 .chip .n{color:var(--muted);font-size:11px}
-#stats{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;padding-left:10px}
+#stats{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;padding-left:10px;text-align:right}
 main{flex:1;display:flex;min-height:0}
 #graph{flex:1;position:relative;min-width:0}
-#graph svg{width:100%;height:100%;display:block;cursor:grab}
+#graph svg{width:100%;height:100%;display:block;cursor:grab;touch-action:none}
 #graph svg:active{cursor:grabbing}
 .link{stroke:#3d4855;stroke-width:1.3;transition:stroke-opacity .2s}
 .link.up{stroke:var(--up);stroke-width:2.2}
 .link.down{stroke:var(--down);stroke-width:2.2}
 .link.dim{stroke-opacity:.07}
 .hit{stroke:transparent;stroke-width:12;cursor:help}
-.node circle{stroke:#0d1117;stroke-width:2;cursor:pointer;transition:opacity .2s}
-.node text{font-size:11px;fill:var(--text);paint-order:stroke;stroke:var(--bg);stroke-width:3px;pointer-events:none;transition:opacity .2s}
-.node.dim circle,.node.dim text{opacity:.12}
-.node.sel circle{stroke:#fff;stroke-width:3}
-.node.sel text{font-weight:700;font-size:13px}
-#tooltip{position:absolute;pointer-events:none;background:rgba(21,27,35,.97);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12.5px;line-height:1.55;opacity:0;transition:opacity .12s;max-width:270px;z-index:5}
-#note{position:absolute;left:12px;bottom:10px;font-size:11px;color:var(--muted);background:rgba(13,17,23,.75);padding:4px 8px;border-radius:6px;pointer-events:none}
-#panel{width:360px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}
+.node{cursor:pointer;transition:opacity .2s}
+.node .ring{stroke:#0d1117;stroke-width:1.5}
+.node .face{fill:#fff}
+.node .init{font-size:11px;font-weight:700;fill:#1f2937;pointer-events:none}
+.node .name{font-size:11px;fill:var(--text);paint-order:stroke;stroke:var(--bg);stroke-width:3px;pointer-events:none}
+.node .pct{font-size:10px;font-weight:700;paint-order:stroke;stroke:var(--bg);stroke-width:3px;pointer-events:none}
+.node.dim{opacity:.13}
+.node.sel .ring{stroke:#fff;stroke-width:3}
+.node.sel .name{font-weight:700;font-size:13px}
+.rise{color:var(--rise);fill:var(--rise)}
+.fall{color:var(--fall);fill:var(--fall)}
+.flat{color:var(--muted);fill:var(--muted)}
+#tooltip{position:absolute;pointer-events:none;background:rgba(21,27,35,.97);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12.5px;line-height:1.55;opacity:0;transition:opacity .12s;max-width:280px;z-index:5}
+#note{position:absolute;left:12px;bottom:10px;font-size:11px;color:var(--muted);background:rgba(13,17,23,.75);padding:4px 8px;border-radius:6px;pointer-events:none;max-width:calc(100% - 24px)}
+#panel{width:370px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}
 #panel-handle{display:none}
 #panel-body{padding:18px}
 #panel h2{margin:0;font-size:20px}
-#panel h3{font-size:14px;margin:16px 0 8px}
+#panel h3{font-size:14px;margin:18px 0 8px}
 .co-head{display:flex;gap:12px;align-items:center;margin-bottom:6px}
-.big-dot{width:16px;height:16px;border-radius:50%;flex-shrink:0}
+.co-logo{width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:4px solid}
+.co-logo img{width:26px;height:26px;object-fit:contain}
+.co-logo span{font-weight:700;color:#1f2937}
 .en{color:var(--muted);font-size:13px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .tag{font-size:12px;padding:3px 8px;border-radius:6px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
-.desc{font-size:14px;line-height:1.7;color:#c9d1d9;margin:10px 0 14px}
-.actions{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-.seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:3px}
+.quote{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:12px 0}
+.q-row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.q-price{font-size:24px;font-weight:700;letter-spacing:.3px}
+.q-chg{font-size:15px;font-weight:700}
+.q-meta{font-size:11.5px;color:var(--muted);margin-top:4px}
+.desc{font-size:14px;line-height:1.7;color:#c9d1d9;margin:10px 0 4px}
+.news{display:block;text-decoration:none;color:var(--text);background:var(--panel-2);border:1px solid transparent;border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:13.5px;line-height:1.5}
+.news:hover{border-color:var(--accent)}
+.news .nd{display:block;font-size:11.5px;color:var(--muted);margin-top:3px}
+.actions{display:flex;gap:8px;margin:10px 0 4px;flex-wrap:wrap}
+.seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:3px;margin-top:18px}
 .seg button{flex:1;background:none;border:0;color:var(--muted);padding:6px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
 .seg button.on{background:var(--line);color:var(--text);font-weight:600}
 .rel-sec h3{display:flex;align-items:center;gap:8px}
@@ -79,6 +97,7 @@ main{flex:1;display:flex;min-height:0}
 .rel .dot{width:9px;height:9px;border-radius:50%;margin-top:5px;flex-shrink:0}
 .rel .rn{font-weight:600}
 .rel .rl{color:var(--muted)}
+.rel .rp{margin-left:auto;font-size:12px;font-weight:700;white-space:nowrap;padding-left:8px}
 .empty{font-size:13px;color:var(--muted);padding:2px 0}
 .hint{font-size:12px;color:var(--muted);margin-top:14px}
 .muted{color:var(--muted)}
@@ -88,6 +107,7 @@ main{flex:1;display:flex;min-height:0}
 #fallback{padding:40px;color:var(--muted)}
 @media (max-width:760px){
   header{padding:8px 12px}
+  .brand h1{font-size:16px}
   .brand p{display:none}
   .tools{margin-left:0;width:100%}
   #search{flex:1;width:auto}
@@ -97,7 +117,7 @@ main{flex:1;display:flex;min-height:0}
   #panel{position:fixed;left:0;right:0;bottom:0;width:auto;max-height:62vh;border-left:none;border-top:1px solid var(--line);border-radius:14px 14px 0 0;transform:translateY(calc(100% - 46px));transition:transform .25s ease;z-index:10;box-shadow:0 -8px 24px rgba(0,0,0,.45)}
   #panel.open{transform:none}
   #panel-handle{display:flex;align-items:center;justify-content:space-between;height:46px;padding:0 18px;position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--line);font-weight:600;cursor:pointer;z-index:1}
-  #note{bottom:54px}
+  #note{display:none}
 }
 </style>
 </head>
@@ -105,7 +125,7 @@ main{flex:1;display:flex;min-height:0}
 <header>
   <div class="brand">
     <h1>AI 半導體供應鏈地圖</h1>
-    <p>台灣半導體 × AI 伺服器 × 國際客戶｜點選公司查看上下游與最新新聞</p>
+    <p>台灣半導體 × AI 伺服器 × 國際客戶｜點選公司查看上下游、股價與最新新聞</p>
   </div>
   <div class="tools">
     <input id="search" type="search" list="co-list" placeholder="搜尋公司或代號，如 台積電、2330、NVIDIA" autocomplete="off">
@@ -121,7 +141,7 @@ main{flex:1;display:flex;min-height:0}
 <main>
   <section id="graph">
     <div id="tooltip"></div>
-    <div id="note">資料整理於 2026 年 10 月，依公開資訊整理，僅供學習參考，非投資建議</div>
+    <div id="note"></div>
   </section>
   <aside id="panel">
     <div id="panel-handle"><span id="handle-title">使用說明</span><span id="handle-arrow">▲</span></div>
@@ -130,114 +150,120 @@ main{flex:1;display:flex;min-height:0}
 </main>
 
 <script>
+/* ====== 股價與新聞：由 GitHub Actions 每日自動更新（scripts/update_data.py），請勿手動編輯下一行 ====== */
+/*LIVE-START*/const LIVE = {"updated": "", "prices": {}, "news": {}};/*LIVE-END*/
+</script>
+
+<script>
 /* ====== 資料區：產業分類、公司、供應關係 ====== */
 const INDUSTRIES = [
   { key: "equip",   name: "設備材料",     color: "#a78bfa" },
   { key: "foundry", name: "晶圓代工",     color: "#ef4444" },
-  { key: "memory",  name: "記憶體",       color: "#f472b6" },
+  { key: "memory",  name: "記憶體",       color: "#2dd4bf" },
   { key: "osat",    name: "封裝測試",     color: "#4ade80" },
   { key: "comp",    name: "零組件",       color: "#94a3b8" },
   { key: "ic",      name: "IC 設計",      color: "#facc15" },
   { key: "odm",     name: "伺服器／組裝", color: "#60a5fa" },
-  { key: "brand",   name: "品牌／雲端",   color: "#f5f5f4" }
+  { key: "brand",   name: "品牌／雲端",   color: "#f472b6" }
 ];
 
-// tier：市值規模示意（L 大型 / M 中型 / S 小型）；q：新聞搜尋關鍵字
+// tier：市值規模示意（L 大型 / M 中型 / S 小型）；q：新聞搜尋關鍵字；yf：Yahoo Finance 代號；domain：logo 來源網域
+// 注意：每家公司 id～domain 請保持在同一行（自動更新腳本依此讀取）
 const COMPANIES = [
   // 設備材料
-  { id: "asml", name: "艾司摩爾", label: "ASML", en: "ASML", ticker: "ASML", mkt: "US", ind: "equip", tier: "L", q: "艾司摩爾 ASML",
+  { id: "asml", name: "艾司摩爾", label: "ASML", en: "ASML", ticker: "ASML", yf: "ASML", mkt: "US", ind: "equip", tier: "L", q: "艾司摩爾", domain: "asml.com",
     desc: "荷蘭半導體設備商，全球唯一能量產 EUV 極紫外光曝光機的廠商，是先進製程不可或缺的關鍵設備來源。" },
-  { id: "amat", name: "應用材料", label: "AMAT", en: "Applied Materials", ticker: "AMAT", mkt: "US", ind: "equip", tier: "M", q: "應用材料",
+  { id: "amat", name: "應用材料", label: "AMAT", en: "Applied Materials", ticker: "AMAT", yf: "AMAT", mkt: "US", ind: "equip", tier: "M", q: "應用材料", domain: "appliedmaterials.com",
     desc: "美國最大半導體設備商，產品涵蓋薄膜沉積、蝕刻、離子佈植等前段製程設備。" },
-  { id: "tel", name: "東京威力科創", label: "TEL", en: "Tokyo Electron", ticker: "8035.T", mkt: "JP", ind: "equip", tier: "M", q: "東京威力科創",
+  { id: "tel", name: "東京威力科創", label: "TEL", en: "Tokyo Electron", ticker: "8035.T", yf: "8035.T", mkt: "JP", ind: "equip", tier: "M", q: "東京威力科創", domain: "tel.com",
     desc: "日本半導體設備龍頭，塗佈顯影設備市占率極高，也供應蝕刻與沉積設備。" },
-  { id: "shinetsu", name: "信越化學", label: "Shin-Etsu", en: "Shin-Etsu Chemical", ticker: "4063.T", mkt: "JP", ind: "equip", tier: "M", q: "信越化學",
+  { id: "shinetsu", name: "信越化學", label: "Shin-Etsu", en: "Shin-Etsu Chemical", ticker: "4063.T", yf: "4063.T", mkt: "JP", ind: "equip", tier: "M", q: "信越化學", domain: "shinetsu.co.jp",
     desc: "全球最大矽晶圓供應商之一，同時是光阻等半導體材料的重要廠商。" },
-  { id: "gw", name: "環球晶", en: "GlobalWafers", ticker: "6488", mkt: "TW", ind: "equip", tier: "S", q: "環球晶",
+  { id: "gw", name: "環球晶", en: "GlobalWafers", ticker: "6488", yf: "6488.TWO", mkt: "TW", ind: "equip", tier: "S", q: "環球晶", domain: "sas-globalwafers.com",
     desc: "台灣矽晶圓大廠，全球市占率名列前茅，供應晶圓代工與記憶體廠所需的矽晶圓。" },
-  { id: "gudeng", name: "家登", en: "Gudeng Precision", ticker: "3680", mkt: "TW", ind: "equip", tier: "S", q: "家登",
+  { id: "gudeng", name: "家登", en: "Gudeng Precision", ticker: "3680", yf: "3680.TWO", mkt: "TW", ind: "equip", tier: "S", q: "家登", domain: "gudeng.com",
     desc: "專精光罩傳送盒與晶圓載具，是 EUV 光罩盒的主要供應商之一。" },
 
   // 晶圓代工
-  { id: "tsmc", name: "台積電", en: "TSMC", ticker: "2330", mkt: "TW", ind: "foundry", tier: "L", q: "台積電",
+  { id: "tsmc", name: "台積電", en: "TSMC", ticker: "2330", yf: "2330.TW", mkt: "TW", ind: "foundry", tier: "L", q: "台積電", domain: "tsmc.com",
     desc: "全球最大晶圓代工廠，掌握最先進製程與 CoWoS 先進封裝，是 AI 晶片供應鏈的核心。" },
-  { id: "umc", name: "聯電", en: "UMC", ticker: "2303", mkt: "TW", ind: "foundry", tier: "S", q: "聯電",
+  { id: "umc", name: "聯電", en: "UMC", ticker: "2303", yf: "2303.TW", mkt: "TW", ind: "foundry", tier: "S", q: "聯電", domain: "umc.com",
     desc: "台灣第二大晶圓代工廠，專注成熟製程，產品應用於通訊、車用與消費性電子。" },
 
   // 記憶體
-  { id: "skh", name: "SK 海力士", label: "SK hynix", en: "SK hynix", ticker: "000660.KS", mkt: "KR", ind: "memory", tier: "M", q: "SK海力士",
+  { id: "skh", name: "SK 海力士", label: "SK hynix", en: "SK hynix", ticker: "000660.KS", yf: "000660.KS", mkt: "KR", ind: "memory", tier: "M", q: "SK海力士", domain: "skhynix.com",
     desc: "南韓記憶體大廠，HBM 高頻寬記憶體技術領先，是 NVIDIA AI GPU 的主要 HBM 供應商。" },
-  { id: "mu", name: "美光", label: "Micron", en: "Micron", ticker: "MU", mkt: "US", ind: "memory", tier: "M", q: "美光",
+  { id: "mu", name: "美光", label: "Micron", en: "Micron", ticker: "MU", yf: "MU", mkt: "US", ind: "memory", tier: "M", q: "美光", domain: "micron.com",
     desc: "美國記憶體大廠，生產 DRAM、NAND 與 HBM，在台灣設有大型 DRAM 生產基地。" },
 
   // 封裝測試
-  { id: "ase", name: "日月光投控", label: "日月光", en: "ASE Technology", ticker: "3711", mkt: "TW", ind: "osat", tier: "M", q: "日月光",
+  { id: "ase", name: "日月光投控", label: "日月光", en: "ASE Technology", ticker: "3711", yf: "3711.TW", mkt: "TW", ind: "osat", tier: "M", q: "日月光", domain: "aseglobal.com",
     desc: "全球最大半導體封裝測試廠，旗下包含日月光、矽品與環旭電子，提供封裝、測試與系統級封裝服務。" },
-  { id: "kyec", name: "京元電子", label: "京元電", en: "KYEC", ticker: "2449", mkt: "TW", ind: "osat", tier: "S", q: "京元電",
+  { id: "kyec", name: "京元電子", label: "京元電", en: "KYEC", ticker: "2449", yf: "2449.TW", mkt: "TW", ind: "osat", tier: "S", q: "京元電", domain: "kyec.com.tw",
     desc: "台灣最大專業晶片測試廠，承接 AI GPU 等高階晶片的測試業務。" },
-  { id: "pti", name: "力成", en: "Powertech Technology", ticker: "6239", mkt: "TW", ind: "osat", tier: "S", q: "力成",
+  { id: "pti", name: "力成", en: "Powertech Technology", ticker: "6239", yf: "6239.TW", mkt: "TW", ind: "osat", tier: "S", q: "力成", domain: "pti.com.tw",
     desc: "記憶體封裝測試大廠，主要客戶包括美光等記憶體業者。" },
 
   // 零組件
-  { id: "unimicron", name: "欣興", en: "Unimicron", ticker: "3037", mkt: "TW", ind: "comp", tier: "S", q: "欣興",
+  { id: "unimicron", name: "欣興", en: "Unimicron", ticker: "3037", yf: "3037.TW", mkt: "TW", ind: "comp", tier: "S", q: "欣興", domain: "unimicron.com",
     desc: "全球 ABF 載板龍頭之一。ABF 載板是承載高階 CPU、GPU 晶片的關鍵基板。" },
-  { id: "delta", name: "台達電", en: "Delta Electronics", ticker: "2308", mkt: "TW", ind: "comp", tier: "M", q: "台達電",
+  { id: "delta", name: "台達電", en: "Delta Electronics", ticker: "2308", yf: "2308.TW", mkt: "TW", ind: "comp", tier: "M", q: "台達電", domain: "deltaww.com",
     desc: "電源管理與散熱解決方案大廠，提供 AI 伺服器與資料中心的電源、液冷等方案。" },
-  { id: "avc", name: "奇鋐", en: "AVC", ticker: "3017", mkt: "TW", ind: "comp", tier: "S", q: "奇鋐",
+  { id: "avc", name: "奇鋐", en: "AVC", ticker: "3017", yf: "3017.TW", mkt: "TW", ind: "comp", tier: "S", q: "奇鋐", domain: "avc.co",
     desc: "散熱模組大廠，供應 AI 伺服器所需的水冷板、液冷與氣冷散熱方案。" },
-  { id: "kingslide", name: "川湖", en: "King Slide", ticker: "2059", mkt: "TW", ind: "comp", tier: "S", q: "川湖",
+  { id: "kingslide", name: "川湖", en: "King Slide", ticker: "2059", yf: "2059.TW", mkt: "TW", ind: "comp", tier: "S", q: "川湖", domain: "kingslide.com",
     desc: "伺服器滑軌全球龍頭，產品用於資料中心伺服器機櫃。" },
-  { id: "lotes", name: "嘉澤", en: "Lotes", ticker: "3533", mkt: "TW", ind: "comp", tier: "S", q: "嘉澤",
+  { id: "lotes", name: "嘉澤", en: "Lotes", ticker: "3533", yf: "3533.TW", mkt: "TW", ind: "comp", tier: "S", q: "嘉澤", domain: "lotes.com.tw",
     desc: "連接器大廠，CPU 插槽（Socket）市占率高，供應處理器大廠與伺服器平台。" },
 
   // IC 設計
-  { id: "nvda", name: "輝達", label: "NVIDIA", en: "NVIDIA", ticker: "NVDA", mkt: "US", ind: "ic", tier: "L", q: "輝達",
+  { id: "nvda", name: "輝達", label: "NVIDIA", en: "NVIDIA", ticker: "NVDA", yf: "NVDA", mkt: "US", ind: "ic", tier: "L", q: "輝達", domain: "nvidia.com",
     desc: "AI 加速運算龍頭，GPU 與 GB200／GB300 等平台是 AI 資料中心的核心，帶動整條台灣 AI 伺服器供應鏈。" },
-  { id: "amd", name: "超微", label: "AMD", en: "AMD", ticker: "AMD", mkt: "US", ind: "ic", tier: "M", q: "超微 AMD",
+  { id: "amd", name: "超微", label: "AMD", en: "AMD", ticker: "AMD", yf: "AMD", mkt: "US", ind: "ic", tier: "M", q: "超微", domain: "amd.com",
     desc: "設計 EPYC 伺服器 CPU、Ryzen 處理器與 Instinct AI GPU，晶片主要由台積電代工。" },
-  { id: "intc", name: "英特爾", label: "Intel", en: "Intel", ticker: "INTC", mkt: "US", ind: "ic", tier: "M", q: "英特爾",
+  { id: "intc", name: "英特爾", label: "Intel", en: "Intel", ticker: "INTC", yf: "INTC", mkt: "US", ind: "ic", tier: "M", q: "英特爾", domain: "intel.com",
     desc: "老牌 CPU 大廠，兼具晶片設計與自有晶圓廠，部分新世代處理器的運算晶片塊委由台積電生產。" },
-  { id: "avgo", name: "博通", label: "Broadcom", en: "Broadcom", ticker: "AVGO", mkt: "US", ind: "ic", tier: "L", q: "博通",
+  { id: "avgo", name: "博通", label: "Broadcom", en: "Broadcom", ticker: "AVGO", yf: "AVGO", mkt: "US", ind: "ic", tier: "L", q: "博通", domain: "broadcom.com",
     desc: "網通晶片與客製化 AI ASIC 大廠，與 Google 合作設計 TPU。" },
-  { id: "qcom", name: "高通", label: "Qualcomm", en: "Qualcomm", ticker: "QCOM", mkt: "US", ind: "ic", tier: "M", q: "高通",
+  { id: "qcom", name: "高通", label: "Qualcomm", en: "Qualcomm", ticker: "QCOM", yf: "QCOM", mkt: "US", ind: "ic", tier: "M", q: "高通", domain: "qualcomm.com",
     desc: "手機處理器與通訊晶片大廠，Snapdragon 系列也進軍 Windows 筆電。" },
-  { id: "mtk", name: "聯發科", en: "MediaTek", ticker: "2454", mkt: "TW", ind: "ic", tier: "M", q: "聯發科",
+  { id: "mtk", name: "聯發科", en: "MediaTek", ticker: "2454", yf: "2454.TW", mkt: "TW", ind: "ic", tier: "M", q: "聯發科", domain: "mediatek.com",
     desc: "台灣最大 IC 設計公司，天璣手機晶片出貨量全球領先，也與 NVIDIA 合作開發 GB10 晶片。" },
-  { id: "rtk", name: "瑞昱", en: "Realtek", ticker: "2379", mkt: "TW", ind: "ic", tier: "S", q: "瑞昱",
+  { id: "rtk", name: "瑞昱", en: "Realtek", ticker: "2379", yf: "2379.TW", mkt: "TW", ind: "ic", tier: "S", q: "瑞昱", domain: "realtek.com",
     desc: "網通與多媒體 IC 設計大廠，乙太網路、音效與 Wi-Fi 晶片廣泛用於 PC 與網通設備。" },
-  { id: "alchip", name: "世芯-KY", label: "世芯", en: "Alchip", ticker: "3661", mkt: "TW", ind: "ic", tier: "S", q: "世芯",
+  { id: "alchip", name: "世芯-KY", label: "世芯", en: "Alchip", ticker: "3661", yf: "3661.TW", mkt: "TW", ind: "ic", tier: "S", q: "世芯", domain: "alchip.com",
     desc: "客製化 ASIC 設計服務公司，協助雲端業者打造自研 AI 晶片。" },
-  { id: "guc", name: "創意", en: "GUC", ticker: "3443", mkt: "TW", ind: "ic", tier: "S", q: "創意電子",
+  { id: "guc", name: "創意", en: "GUC", ticker: "3443", yf: "3443.TW", mkt: "TW", ind: "ic", tier: "S", q: "創意電子", domain: "guc-asic.com",
     desc: "ASIC 設計服務公司，台積電為最大股東，擅長先進製程與先進封裝設計。" },
-  { id: "aspeed", name: "信驊", en: "ASPEED", ticker: "5274", mkt: "TW", ind: "ic", tier: "S", q: "信驊",
+  { id: "aspeed", name: "信驊", en: "ASPEED", ticker: "5274", yf: "5274.TWO", mkt: "TW", ind: "ic", tier: "S", q: "信驊", domain: "aspeedtech.com",
     desc: "伺服器 BMC（遠端管理晶片）全球龍頭，主流伺服器幾乎都會用到。" },
 
   // 伺服器／組裝
-  { id: "foxconn", name: "鴻海", en: "Hon Hai (Foxconn)", ticker: "2317", mkt: "TW", ind: "odm", tier: "M", q: "鴻海",
+  { id: "foxconn", name: "鴻海", en: "Hon Hai (Foxconn)", ticker: "2317", yf: "2317.TW", mkt: "TW", ind: "odm", tier: "M", q: "鴻海", domain: "foxconn.com",
     desc: "全球最大電子代工廠，除了組裝 iPhone，也是 NVIDIA AI 伺服器機櫃的主要組裝廠。" },
-  { id: "quanta", name: "廣達", en: "Quanta", ticker: "2382", mkt: "TW", ind: "odm", tier: "M", q: "廣達",
+  { id: "quanta", name: "廣達", en: "Quanta", ticker: "2382", yf: "2382.TW", mkt: "TW", ind: "odm", tier: "M", q: "廣達", domain: "quantatw.com",
     desc: "筆電與伺服器代工大廠，為多家雲端業者生產 AI 伺服器。" },
-  { id: "wistron", name: "緯創", en: "Wistron", ticker: "3231", mkt: "TW", ind: "odm", tier: "S", q: "緯創",
+  { id: "wistron", name: "緯創", en: "Wistron", ticker: "3231", yf: "3231.TW", mkt: "TW", ind: "odm", tier: "S", q: "緯創", domain: "wistron.com",
     desc: "電子代工廠，負責生產 NVIDIA AI GPU 的基板與模組。" },
-  { id: "wiwynn", name: "緯穎", en: "Wiwynn", ticker: "6669", mkt: "TW", ind: "odm", tier: "S", q: "緯穎",
+  { id: "wiwynn", name: "緯穎", en: "Wiwynn", ticker: "6669", yf: "6669.TW", mkt: "TW", ind: "odm", tier: "S", q: "緯穎", domain: "wiwynn.com",
     desc: "緯創旗下雲端伺服器廠，主要客戶為 Microsoft、Meta 等大型雲端業者。" },
-  { id: "gigabyte", name: "技嘉", en: "GIGABYTE", ticker: "2376", mkt: "TW", ind: "odm", tier: "S", q: "技嘉",
+  { id: "gigabyte", name: "技嘉", en: "GIGABYTE", ticker: "2376", yf: "2376.TW", mkt: "TW", ind: "odm", tier: "S", q: "技嘉", domain: "gigabyte.com",
     desc: "主機板與顯示卡品牌，同時發展 AI 伺服器業務。" },
-  { id: "pegatron", name: "和碩", en: "Pegatron", ticker: "4938", mkt: "TW", ind: "odm", tier: "S", q: "和碩",
+  { id: "pegatron", name: "和碩", en: "Pegatron", ticker: "4938", yf: "4938.TW", mkt: "TW", ind: "odm", tier: "S", q: "和碩", domain: "pegatroncorp.com",
     desc: "電子代工廠，為 Apple 組裝 iPhone 等產品。" },
 
   // 品牌／雲端
-  { id: "apple", name: "蘋果", label: "Apple", en: "Apple", ticker: "AAPL", mkt: "US", ind: "brand", tier: "L", q: "蘋果 Apple",
+  { id: "apple", name: "蘋果", label: "Apple", en: "Apple", ticker: "AAPL", yf: "AAPL", mkt: "US", ind: "brand", tier: "L", q: "蘋果 iPhone", domain: "apple.com",
     desc: "iPhone、Mac 品牌商，自行設計 A 系列與 M 系列晶片，由台積電代工。" },
-  { id: "msft", name: "微軟", label: "Microsoft", en: "Microsoft", ticker: "MSFT", mkt: "US", ind: "brand", tier: "L", q: "微軟",
+  { id: "msft", name: "微軟", label: "Microsoft", en: "Microsoft", ticker: "MSFT", yf: "MSFT", mkt: "US", ind: "brand", tier: "L", q: "微軟", domain: "microsoft.com",
     desc: "Azure 雲端業者，大量採購 AI GPU 與伺服器建置資料中心。" },
-  { id: "amzn", name: "亞馬遜", label: "Amazon", en: "Amazon (AWS)", ticker: "AMZN", mkt: "US", ind: "brand", tier: "L", q: "亞馬遜 AWS",
+  { id: "amzn", name: "亞馬遜", label: "Amazon", en: "Amazon (AWS)", ticker: "AMZN", yf: "AMZN", mkt: "US", ind: "brand", tier: "L", q: "亞馬遜", domain: "amazon.com",
     desc: "旗下 AWS 是全球最大雲端平台，除了採購 GPU，也自研 Trainium、Inferentia AI 晶片。" },
-  { id: "googl", name: "Google", label: "Google", en: "Alphabet", ticker: "GOOGL", mkt: "US", ind: "brand", tier: "L", q: "Google",
+  { id: "googl", name: "Google", label: "Google", en: "Alphabet", ticker: "GOOGL", yf: "GOOGL", mkt: "US", ind: "brand", tier: "L", q: "Google", domain: "google.com",
     desc: "Google Cloud 營運者，自研 TPU AI 晶片，並大量採購 AI 伺服器。" },
-  { id: "meta", name: "Meta", label: "Meta", en: "Meta Platforms", ticker: "META", mkt: "US", ind: "brand", tier: "L", q: "Meta",
+  { id: "meta", name: "Meta", label: "Meta", en: "Meta Platforms", ticker: "META", yf: "META", mkt: "US", ind: "brand", tier: "L", q: "Meta", domain: "meta.com",
     desc: "Facebook、Instagram 母公司，大規模投資 AI 資料中心，並自研 MTIA 晶片。" },
-  { id: "dell", name: "戴爾", label: "Dell", en: "Dell Technologies", ticker: "DELL", mkt: "US", ind: "brand", tier: "M", q: "戴爾 Dell",
+  { id: "dell", name: "戴爾", label: "Dell", en: "Dell Technologies", ticker: "DELL", yf: "DELL", mkt: "US", ind: "brand", tier: "M", q: "戴爾", domain: "dell.com",
     desc: "PC 與企業伺服器品牌，推出搭載 NVIDIA GPU 的 AI 伺服器。" }
 ];
 
@@ -330,14 +356,19 @@ const RELATIONS = [
   }
 
   const indMap = Object.fromEntries(INDUSTRIES.map(i => [i.key, i]));
-  const TIER_R = { L: 19, M: 13, S: 9 };
+  const TIER_R = { L: 24, M: 18, S: 14 };
   const TIER_NAME = { L: "大型", M: "中型", S: "小型" };
   const MKT_NAME = { TW: "台股", US: "美股", JP: "日股", KR: "韓股" };
-  // 由左（上游）到右（下游）的產業位置
-  const LAYER_X = { equip: -560, foundry: -330, memory: -330, osat: -110, comp: -110, ic: 110, odm: 340, brand: 560 };
+  const CUR = { TWD: "NT$", USD: "US$", JPY: "¥", KRW: "₩" };
+  const MKT_CUR = { TW: "TWD", US: "USD", JP: "JPY", KR: "KRW" };
+  // 產業在供應鏈中的層級：0 最上游 → 5 最下游
+  const LAYER = { equip: 0, foundry: 1, memory: 1, osat: 2, comp: 2, ic: 3, odm: 4, brand: 5 };
   const UP_COLOR = "#22d3ee", DOWN_COLOR = "#fb923c";
+  const LIVE_DATA = (typeof LIVE !== "undefined" && LIVE) || {};
+  const PRICES = LIVE_DATA.prices || {};
+  const NEWS = LIVE_DATA.news || {};
 
-  const nodes = COMPANIES.map(d => ({ ...d, label: d.label || d.name }));
+  const nodes = COMPANIES.map((d, i) => ({ ...d, label: d.label || d.name, idx: i }));
   const byId = new Map(nodes.map(n => [n.id, n]));
   const links = RELATIONS.map(([s, t, label]) => ({ source: s, target: t, sid: s, tid: t, label }));
   const inAdj = new Map(nodes.map(n => [n.id, []]));
@@ -347,11 +378,27 @@ const RELATIONS = [
   const hidden = new Set();
   let selected = null;
   let depth = 1;
+  let mode = null; // "h"：桌機左右排列；"v"：手機上下排列
 
-  const newsUrl = d => `https://news.google.com/search?q=${encodeURIComponent(d.q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`;
+  /* ---------- 工具函式 ---------- */
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const newsUrl = d => `https://news.google.com/search?q=${encodeURIComponent(d.q + " site:tw.stock.yahoo.com")}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`;
   const stockUrl = d => d.mkt === "TW"
-    ? `https://tw.stock.yahoo.com/quote/${d.ticker}`
-    : `https://finance.yahoo.com/quote/${encodeURIComponent(d.ticker)}`;
+    ? `https://tw.stock.yahoo.com/quote/${d.yf}`
+    : `https://finance.yahoo.com/quote/${encodeURIComponent(d.yf)}`;
+  const logoUrl = d => `https://www.google.com/s2/favicons?domain=${d.domain}&sz=128`;
+  const trend = p => !p ? "flat" : p.change > 0 ? "rise" : p.change < 0 ? "fall" : "flat";
+  const fmt = (n, cur) => {
+    const dec = (cur === "JPY" || cur === "KRW") ? 0 : 2;
+    return Number(n).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  };
+  const pctText = p => p ? `${p.pct > 0 ? "+" : ""}${p.pct.toFixed(2)}%` : "";
+  const chgText = (p, cur) => {
+    if (!p) return "";
+    const arrow = p.change > 0 ? "▲" : p.change < 0 ? "▼" : "－";
+    return `${arrow} ${fmt(Math.abs(p.change), cur)}（${pctText(p)}）`;
+  };
+  const fmtDate = s => s ? s.replace(/-/g, "/") : "";
 
   /* ---------- SVG 與縮放 ---------- */
   const svg = d3.select(graphEl).append("svg");
@@ -374,19 +421,51 @@ const RELATIONS = [
     .attr("class", "link").attr("marker-end", "url(#arrow)");
   const hitSel = hitG.selectAll("line").data(links).join("line").attr("class", "hit");
   const nodeSel = nodeG.selectAll("g").data(nodes).join("g").attr("class", "node");
-  nodeSel.append("circle").attr("r", d => TIER_R[d.tier]).attr("fill", d => indMap[d.ind].color);
-  nodeSel.append("text").text(d => d.label).attr("text-anchor", "middle").attr("dy", d => TIER_R[d.tier] + 13);
 
-  /* ---------- 力導向模擬（先預先計算，避免開場亂跳） ---------- */
+  // 節點：外圈＝產業色塊，內圈白底放公司 logo；logo 載入失敗時顯示文字縮寫
+  nodeSel.append("circle").attr("class", "ring").attr("r", d => TIER_R[d.tier]).attr("fill", d => indMap[d.ind].color);
+  nodeSel.append("circle").attr("class", "face").attr("r", d => TIER_R[d.tier] - 4);
+  nodeSel.append("text").attr("class", "init").attr("text-anchor", "middle").attr("dy", "0.35em")
+    .text(d => d.label.slice(0, 1));
+  nodeSel.append("image")
+    .attr("href", logoUrl)
+    .attr("width", d => (TIER_R[d.tier] - 4) * 1.4).attr("height", d => (TIER_R[d.tier] - 4) * 1.4)
+    .attr("x", d => -(TIER_R[d.tier] - 4) * 0.7).attr("y", d => -(TIER_R[d.tier] - 4) * 0.7)
+    .on("load", function () { d3.select(this.parentNode).select(".init").style("display", "none"); })
+    .on("error", function () { d3.select(this).remove(); });
+  const labelSel = nodeSel.append("text").attr("text-anchor", "middle").attr("dy", d => TIER_R[d.tier] + 13);
+  labelSel.append("tspan").attr("class", "name").text(d => d.label);
+  labelSel.append("tspan").attr("x", 0).attr("dy", "1.25em")
+    .attr("class", d => "pct " + trend(PRICES[d.id]))
+    .text(d => pctText(PRICES[d.id]));
+
+  /* ---------- 力導向模擬：桌機左右分層、手機上下分層 ---------- */
   const sim = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(links).id(d => d.id).distance(85).strength(0.25))
-    .force("charge", d3.forceManyBody().strength(-320))
-    .force("x", d3.forceX(d => LAYER_X[d.ind]).strength(0.35))
-    .force("y", d3.forceY(0).strength(0.06))
-    .force("collide", d3.forceCollide().radius(d => TIER_R[d.tier] + 16))
+    .force("link", d3.forceLink(links).id(d => d.id).distance(85).strength(0.2))
     .stop();
-  for (let i = 0; i < 400; i++) sim.tick();
-  sim.on("tick", ticked);
+
+  function layout() {
+    const m = window.innerWidth < 760 ? "v" : "h";
+    if (m === mode) return false;
+    mode = m;
+    const jitter = i => ((i * 37) % 90) - 45; // 固定的初始偏移，讓每次排版結果一致
+    if (m === "h") {
+      sim.force("x", d3.forceX(d => (LAYER[d.ind] - 2.5) * 230).strength(0.35))
+        .force("y", d3.forceY(0).strength(0.07))
+        .force("charge", d3.forceManyBody().strength(-380))
+        .force("collide", d3.forceCollide().radius(d => TIER_R[d.tier] + 18));
+      nodes.forEach(n => { n.x = (LAYER[n.ind] - 2.5) * 230 + jitter(n.idx); n.y = jitter(n.idx * 7); });
+    } else {
+      sim.force("x", d3.forceX(0).strength(0.2))
+        .force("y", d3.forceY(d => (LAYER[d.ind] - 2.5) * 170).strength(0.5))
+        .force("charge", d3.forceManyBody().strength(-170))
+        .force("collide", d3.forceCollide().radius(d => TIER_R[d.tier] + 15));
+      nodes.forEach(n => { n.x = jitter(n.idx * 7) * 3; n.y = (LAYER[n.ind] - 2.5) * 170 + jitter(n.idx) * 0.5; });
+    }
+    sim.alpha(1);
+    for (let i = 0; i < 450; i++) sim.tick();
+    return true;
+  }
 
   function ends(l) {
     const s = l.source, t = l.target;
@@ -405,7 +484,9 @@ const RELATIONS = [
       .attr("x2", l => l.target.x).attr("y2", l => l.target.y);
     nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
   }
+  layout();
   ticked();
+  sim.on("tick", ticked);
 
   nodeSel.call(d3.drag()
     .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.15).restart(); d.fx = d.x; d.fy = d.y; hideTip(); })
@@ -421,29 +502,35 @@ const RELATIONS = [
     let x = e.clientX - r.left + 14, y = e.clientY - r.top + 14;
     if (x + tw > r.width - 8) x = e.clientX - r.left - tw - 14;
     if (y + th > r.height - 8) y = e.clientY - r.top - th - 14;
-    tip.style("left", x + "px").style("top", y + "px");
+    tip.style("left", Math.max(4, x) + "px").style("top", Math.max(4, y) + "px");
   }
   function hideTip() { tip.style("opacity", 0); }
 
   nodeSel
-    .on("mouseenter", (e, d) => showTip(e,
-      `<b>${d.name}</b> <span class="muted">${d.en}</span><br>` +
-      `<span style="color:${indMap[d.ind].color}">●</span> ${indMap[d.ind].name}｜${MKT_NAME[d.mkt]} ${d.ticker}`))
+    .on("mouseenter", (e, d) => {
+      const p = PRICES[d.id], cur = (p && p.cur) || MKT_CUR[d.mkt];
+      const priceLine = p
+        ? `<br>${CUR[cur] || ""}${fmt(p.close, cur)} <span class="${trend(p)}">${chgText(p, cur)}</span>`
+        : "";
+      showTip(e, `<b>${esc(d.name)}</b> <span class="muted">${esc(d.en)}</span><br>` +
+        `<span style="color:${indMap[d.ind].color}">●</span> ${indMap[d.ind].name}｜${MKT_NAME[d.mkt]} ${d.ticker}${priceLine}`);
+    })
     .on("mousemove", moveTip)
     .on("mouseleave", hideTip)
     .on("click", (e, d) => { e.stopPropagation(); select(d.id, false); });
 
   hitSel
-    .on("mouseenter", (e, l) => showTip(e, `<b>${l.source.name}</b> → <b>${l.target.name}</b><br>${l.label}`))
+    .on("mouseenter", (e, l) => showTip(e, `<b>${esc(l.source.name)}</b> → <b>${esc(l.target.name)}</b><br>${esc(l.label)}`))
     .on("mousemove", moveTip)
     .on("mouseleave", hideTip)
     .on("click", e => e.stopPropagation());
 
   svg.on("click", () => clearSel());
 
-  /* ---------- 篩選 ---------- */
+  /* ---------- 篩選與統計 ---------- */
   const chipsEl = document.getElementById("chips");
   const statsEl = document.getElementById("stats");
+  const noteEl = document.getElementById("note");
   INDUSTRIES.forEach(ind => {
     const count = nodes.filter(n => n.ind === ind.key).length;
     const b = document.createElement("button");
@@ -456,6 +543,10 @@ const RELATIONS = [
   allBtn.className = "chip"; allBtn.textContent = "全部顯示";
   allBtn.onclick = () => { hidden.clear(); applyFilter(); };
   chipsEl.appendChild(allBtn);
+
+  const updated = LIVE_DATA.updated || "";
+  noteEl.textContent = (updated ? `股價與新聞更新於 ${fmtDate(updated)}（台灣時間）｜` : "股價與新聞每日自動更新｜") +
+    "紅漲綠跌｜關係依公開資訊整理，僅供學習參考，非投資建議";
 
   const linkVisible = l => !hidden.has(l.source.ind) && !hidden.has(l.target.ind);
 
@@ -521,9 +612,11 @@ const RELATIONS = [
   }
 
   function relButton(target, html, label) {
+    const p = PRICES[target.id];
     return `<button class="rel" data-id="${target.id}">
       <span class="dot" style="background:${indMap[target.ind].color}"></span>
-      <span><span class="rn">${html}</span><br><span class="rl">${label}</span></span></button>`;
+      <span><span class="rn">${html}</span><br><span class="rl">${esc(label)}</span></span>
+      ${p ? `<span class="rp ${trend(p)}">${pctText(p)}</span>` : ""}</button>`;
   }
 
   function relList(res, dir) {
@@ -536,16 +629,42 @@ const RELATIONS = [
     if (!direct.length) html += `<div class="empty">（圖中沒有已知的${dir === "up" ? "上游供應商" : "下游客戶"}）</div>`;
     direct.forEach(l => {
       const other = dir === "up" ? l.source : l.target;
-      html += relButton(other, other.name, l.label);
+      html += relButton(other, esc(other.name), l.label);
     });
     if (depth === 2 && second.length) {
       html += `<div class="lv">第 2 層</div>`;
       second.forEach(l => {
         const far = dir === "up" ? l.source : l.target;
-        html += relButton(far, `${l.source.name} → ${l.target.name}`, l.label);
+        html += relButton(far, `${esc(l.source.name)} → ${esc(l.target.name)}`, l.label);
       });
     }
     return { html, count: direct.length };
+  }
+
+  function quoteHtml(d) {
+    const p = PRICES[d.id];
+    if (!p) return `<div class="quote"><div class="q-meta">股價資料尚未更新（每個交易日自動更新）</div></div>`;
+    const cur = p.cur || MKT_CUR[d.mkt];
+    return `<div class="quote">
+      <div class="q-row">
+        <span class="q-price">${CUR[cur] || ""}${fmt(p.close, cur)}</span>
+        <span class="q-chg ${trend(p)}">${chgText(p, cur)}</span>
+      </div>
+      <div class="q-meta">${fmtDate(p.date)} 收盤／最新價 · 與前一交易日比較 · 來源：${esc(p.src || "")}</div>
+    </div>`;
+  }
+
+  function newsHtml(d) {
+    const list = NEWS[d.id] || [];
+    if (!list.length) return `<div class="empty">目前沒有近期新聞資料（每日自動更新）</div>`;
+    return list.map(n => `<a class="news" href="${esc(n.link)}" target="_blank" rel="noopener">
+      ${esc(n.title)}<span class="nd">${fmtDate(n.time)} · Yahoo股市</span></a>`).join("");
+  }
+
+  function logoHtml(d) {
+    const c = indMap[d.ind].color;
+    return `<div class="co-logo" style="border-color:${c}">
+      <img src="${logoUrl(d)}" alt="" onerror="this.outerHTML='<span>${esc(d.label.slice(0, 1))}</span>'"></div>`;
   }
 
   function renderCompany(up, down) {
@@ -554,18 +673,21 @@ const RELATIONS = [
     handleTitle.textContent = d.name;
     panelBody.innerHTML = `
       <div class="co-head">
-        <span class="big-dot" style="background:${ind.color}"></span>
-        <div><h2>${d.name}</h2><div class="en">${d.en}</div></div>
+        ${logoHtml(d)}
+        <div><h2>${esc(d.name)}</h2><div class="en">${esc(d.en)}</div></div>
       </div>
       <div class="tags">
         <span class="tag">${ind.name}</span>
         <span class="tag">${MKT_NAME[d.mkt]} ${d.ticker}</span>
         <span class="tag">規模：${TIER_NAME[d.tier]}</span>
       </div>
-      <p class="desc">${d.desc}</p>
+      ${quoteHtml(d)}
+      <p class="desc">${esc(d.desc)}</p>
+      <h3>最新新聞</h3>
+      ${newsHtml(d)}
       <div class="actions">
-        <a class="btn primary" href="${newsUrl(d)}" target="_blank" rel="noopener">📰 最新新聞</a>
-        <a class="btn" href="${stockUrl(d)}" target="_blank" rel="noopener">📈 股價資訊</a>
+        <a class="btn primary" href="${newsUrl(d)}" target="_blank" rel="noopener">📰 更多新聞</a>
+        <a class="btn" href="${stockUrl(d)}" target="_blank" rel="noopener">📈 股價走勢</a>
       </div>
       <div class="seg">
         <button data-depth="1" class="${depth === 1 ? "on" : ""}">直接關係</button>
@@ -593,29 +715,33 @@ const RELATIONS = [
     panelBody.innerHTML = `
       <h2>AI 供應鏈怎麼看？</h2>
       <p class="desc">這張圖整理了 ${nodes.length} 家台灣與國際 AI／半導體公司之間的 ${links.length} 條供應關係，
-      由左（上游設備、材料）到右（下游品牌與雲端業者）排列。</p>
+      ${mode === "v" ? "由上（上游設備、材料）到下" : "由左（上游設備、材料）到右"}（下游品牌與雲端業者）排列。
+      每家公司都附上每日股價漲跌與近期新聞。</p>
       <h3>操作方式</h3>
       <ul class="howto">
-        <li>點選公司：查看簡介、上下游與新聞連結</li>
-        <li>拖曳公司：調整位置；滾輪或雙指：縮放</li>
+        <li>點選公司：查看股價、新聞、上下游</li>
+        <li>拖曳公司：調整位置；滾輪或雙指：縮放、平移</li>
         <li>滑鼠移到連線上：查看供應內容</li>
         <li>上方產業按鈕：篩選要顯示的產業</li>
         <li>搜尋框：輸入公司名稱或股票代號</li>
       </ul>
       <h3>圖例</h3>
       <div class="legend-row">
-        <svg width="78" height="40" aria-hidden="true">
-          <circle cx="20" cy="20" r="19" fill="#8b98a5"/><circle cx="50" cy="26" r="13" fill="#8b98a5"/><circle cx="71" cy="30" r="7" fill="#8b98a5"/>
+        <svg width="84" height="44" aria-hidden="true">
+          <circle cx="22" cy="22" r="21" fill="#8b98a5"/><circle cx="22" cy="22" r="17" fill="#fff"/>
+          <circle cx="54" cy="27" r="15" fill="#8b98a5"/><circle cx="54" cy="27" r="11" fill="#fff"/>
+          <circle cx="76" cy="31" r="8" fill="#8b98a5"/><circle cx="76" cy="31" r="4.5" fill="#fff"/>
         </svg>
-        圓點大小＝市值規模（大／中／小，示意）
+        外圈顏色＝產業；大小＝市值規模（示意）
       </div>
+      <div class="legend-row"><span class="rise">+1.23%</span><span class="fall">−1.23%</span>當日漲跌（紅漲綠跌）</div>
       <div class="legend-row"><span class="swatch up"></span>選取後：上游供應關係</div>
       <div class="legend-row"><span class="swatch down"></span>選取後：下游客戶關係</div>
-      <div class="legend-row"><span style="color:#8b98a5">→</span>箭頭方向＝供應商 → 客戶</div>
       <div class="quick">
         <button class="btn primary" data-pick="tsmc">從台積電開始 →</button>
         <button class="btn" data-pick="nvda">看 NVIDIA</button>
-      </div>`;
+      </div>
+      <p class="hint">${esc(noteEl.textContent)}</p>`;
     panelBody.querySelectorAll("[data-pick]").forEach(b => {
       b.onclick = () => select(b.dataset.pick, true);
     });
@@ -628,8 +754,15 @@ const RELATIONS = [
     selected = d;
     applyHighlight();
     panel.scrollTop = 0;
-    if (center) svg.transition().duration(600).call(zoom.translateTo, d.x, d.y);
     setPanelOpen(true);
+    if (center) centerOn(d);
+  }
+
+  function centerOn(d) {
+    const { width, height } = svg.node().getBoundingClientRect();
+    // 手機版面板會蓋住下半部，所以把公司移到畫面上方
+    const p = mode === "v" ? [width / 2, height * 0.2] : [width / 2, height / 2];
+    svg.transition().duration(600).call(zoom.translateTo, d.x, d.y, p);
   }
 
   function clearSel() {
@@ -672,12 +805,21 @@ const RELATIONS = [
   function fitView(animate) {
     const vis = nodes.filter(n => !hidden.has(n.ind));
     if (!vis.length) return;
-    const pad = 50;
+    const pad = 46;
     const x0 = d3.min(vis, n => n.x) - pad, x1 = d3.max(vis, n => n.x) + pad;
-    const y0 = d3.min(vis, n => n.y) - pad, y1 = d3.max(vis, n => n.y) + pad + 14;
+    const y0 = d3.min(vis, n => n.y) - pad, y1 = d3.max(vis, n => n.y) + pad + 24;
     const { width, height } = svg.node().getBoundingClientRect();
-    const k = Math.min(width / (x1 - x0), height / (y1 - y0), 1.6);
-    const t = d3.zoomIdentity.translate(width / 2, height / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+    let t;
+    if (mode === "v") {
+      // 手機：以寬度為準放大，由上往下滑動瀏覽
+      const k = Math.min(width / (x1 - x0), 1.3);
+      const fitsAll = (y1 - y0) * k <= height;
+      t = d3.zoomIdentity.translate(width / 2, fitsAll ? height / 2 : 8).scale(k)
+        .translate(-(x0 + x1) / 2, fitsAll ? -(y0 + y1) / 2 : -y0);
+    } else {
+      const k = Math.min(width / (x1 - x0), height / (y1 - y0), 1.6);
+      t = d3.zoomIdentity.translate(width / 2, height / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+    }
     (animate ? svg.transition().duration(600) : svg).call(zoom.transform, t);
   }
 
@@ -689,6 +831,19 @@ const RELATIONS = [
     fitView(true);
   };
   document.addEventListener("keydown", e => { if (e.key === "Escape") clearSel(); });
+
+  // 視窗大小跨過手機／桌機分界時重新排版
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (layout()) {
+        ticked();
+        if (selected) applyHighlight(); else renderIntro();
+        fitView(false);
+      }
+    }, 200);
+  });
 
   applyFilter();
   renderIntro();
