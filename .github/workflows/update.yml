@@ -4,10 +4,17 @@ on:
   schedule:
     - cron: "40 6 * * 1-5"   # 台灣時間 14:40（台股收盤後）
     - cron: "30 21 * * 1-5"  # 台灣時間 05:30（美股收盤後）
+  push:
+    paths:
+      - index.html            # 重新上傳 index.html 時自動更新一次（機器人自己的提交不會再觸發，不會無限循環）
   workflow_dispatch:          # 也可以在 Actions 頁面手動執行
 
 permissions:
   contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
 
 jobs:
   update:
@@ -24,6 +31,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898599+github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git diff --cached --quiet || git commit -m "自動更新股價與新聞 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')"
+          git diff --cached --quiet && exit 0
+          git commit -m "自動更新股價與新聞 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')"
+          git pull --rebase
           git push
-
